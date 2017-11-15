@@ -2,6 +2,8 @@ package teamup
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"golang.org/x/oauth2"
@@ -28,6 +30,8 @@ type Config struct {
 
 	Username string
 	Password string
+
+	EvPrefixFilters []string
 }
 
 func NewClient(config *Config) (*Client, error) {
@@ -59,6 +63,11 @@ func NewClient(config *Config) (*Client, error) {
 	}
 
 	evURL += "/v3/events"
+	if len(config.EvPrefixFilters) > 0 {
+		urlValues := url.Values{}
+		urlValues.Set("prefix", strings.Join(config.EvPrefixFilters, "|"))
+		evURL += "?" + urlValues.Encode()
+	}
 
 	// escape basic auth
 	oauth2.RegisterBrokenAuthHeaderProvider("https://" + config.AuthHost + "/oauth2/")

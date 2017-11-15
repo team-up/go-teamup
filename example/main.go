@@ -26,6 +26,7 @@ func main() {
 		ClientSecret:    clientSecret,
 		Username:        username,
 		Password:        password,
+		EvPrefixFilters: []string{"chat.message"},
 	})
 	if err != nil {
 		panic(err)
