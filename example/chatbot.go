@@ -43,6 +43,8 @@ type Message struct {
 
 type ChatBot struct {
 	teamupClient *teamup.Client
+
+	botTeams map[uint32]bool
 }
 
 // if received "hello" then response "world"
@@ -58,8 +60,45 @@ func (c *ChatBot) doChatMessage(chat *teamup.Chat) {
 		return
 	}
 
+	message := &Message{}
+
+	if bot, ok := c.botTeams[receivedMessage.Team]; ok && bot {
+		// 봇으로 등록된 팀에서만 extras 동작
+		message.Content = "click button"
+		message.Extras = []Extra{
+			{
+				Version: 1,
+				Type:    "answer",
+				InputButtons: []Button{
+					{
+						Text: "hello",
+						Type: "text",
+					},
+					{
+						Text: "do nothing",
+						Type: "text",
+					},
+				},
+			},
+		}
+
+		if len(receivedMessage.Extras) > 0 {
+			for _, extra := range receivedMessage.Extras {
+				if extra.Type == "init" {
+					info, err := c.postMessage(chat.Room, message)
+					if err != nil {
+						panic(err)
+					}
+
+					fmt.Println(info)
+					return
+				}
+			}
+		}
+	}
+
 	if strings.EqualFold("hello", receivedMessage.Content) {
-		message := &Message{Content: "world"}
+		message.Content = "world"
 
 		info, err := c.postMessage(chat.Room, message)
 		if err != nil {
@@ -128,8 +167,38 @@ func (c *ChatBot) postMessage(room uint64, data interface{}) (map[string]interfa
 }
 
 func NewChatBot(c *teamup.Client) (*ChatBot, error) {
+	// http://team-up.github.io/v1/auth/#api-my-getUser
+	getURL := fmt.Sprintf("https://%s/v1/user", authHost)
+
+	req, err := http.NewRequest(http.MethodGet, getURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	myInfo := &MyInfo{}
+	err = teamup.ReadJSON(res, myInfo)
+	if err != nil {
+		return nil, err
+	}
+
 	chatBot := &ChatBot{
 		teamupClient: c,
+		botTeams:     make(map[uint32]bool),
+	}
+
+	// 봇으로 등록된 팀 목록 설정
+	for _, team := range myInfo.Teams {
+		for _, role := range team.Role {
+			if role == "bot" {
+				chatBot.botTeams[team.Index] = true
+				break
+			}
+		}
 	}
 
 	return chatBot, nil
